@@ -1,0 +1,1256 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 36칸 땅따먹기 배틀 (A1~F6)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;700;800;900&family=JetBrains+Mono:wght@600;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Pretendard', sans-serif;
+            background-color: #f8fafc;
+            color: #0f172a;
+            user-select: none;
+        }
+        .font-mono-code {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .grid-cell-transition {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes popAnimation {
+            0% { transform: scale(0.85); opacity: 0.5; }
+            50% { transform: scale(1.08); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .cell-captured {
+            animation: popAnimation 0.35s ease-out forwards;
+        }
+        /* Sheet-like thick borders like Excel/Google Sheets */
+        .sheet-border {
+            border: 2px solid #1e293b;
+        }
+        .sheet-cell-border {
+            border: 1.5px solid #334155;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50 flex flex-col justify-between p-2 md:p-4 text-slate-900">
+
+    <header class="max-w-7xl w-full mx-auto bg-white rounded-2xl shadow-sm border border-slate-300 p-3 md:p-4 mb-3">
+        <div class="flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">🚩</span>
+                <div>
+                    <h1 class="text-xl md:text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
+                        <span>실시간 36칸 땅따먹기 대배틀</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-mono-code font-bold border border-indigo-200">조별 독립 영토 모드</span>
+                    </h1>
+                    <p class="text-xs text-slate-500 font-medium">조별로 분리된 36칸 맵에서 좌표와 정답을 입력하여 영토를 점령하세요!</p>
+                </div>
+            </div>
+
+            <!-- Global Stats, Public Scoreboard & Private Teacher Answer Button -->
+            <div class="flex items-center gap-2 md:gap-3">
+                <!-- Active Group Badge -->
+                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-300 shadow-xs">
+                    <span class="text-xs font-bold text-slate-500">현재 화면:</span>
+                    <span id="current-group-badge" class="text-sm font-black text-indigo-700 font-mono-code">1조</span>
+                </div>
+
+                <!-- Red Team Score -->
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-50 border-2 border-red-500 shadow-sm">
+                    <span class="w-3.5 h-3.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444]"></span>
+                    <span class="text-xs font-bold text-red-700">레드</span>
+                    <span id="score-red-badge" class="text-lg font-black text-red-600 font-mono-code">0</span>
+                    <span class="text-xs text-red-500 font-bold">칸</span>
+                </div>
+
+                <!-- Blue Team Score -->
+                <div class="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-blue-50 border-2 border-blue-500 shadow-sm">
+                    <span class="w-3.5 h-3.5 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></span>
+                    <span class="text-xs font-bold text-blue-700">블루</span>
+                    <span id="score-blue-badge" class="text-lg font-black text-blue-600 font-mono-code">0</span>
+                    <span class="text-xs text-blue-500 font-bold">칸</span>
+                </div>
+
+                <!-- 1. Public Scoreboard Button (Safe for big screen, NO answers) -->
+                <button onclick="openScoreboardModal()" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition shadow flex items-center gap-1.5 active:scale-95">
+                    <span>📊</span>
+                    <span>대형 전광판 (스크린 중계)</span>
+                </button>
+
+                <!-- 2. Private Teacher Answer Manager (PW: 1234) -->
+                <button onclick="openTeacherLoginModal()" id="teacher-mode-btn" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition shadow flex items-center gap-1.5 active:scale-95">
+                    <span>🔐</span>
+                    <span>교사 정답관리</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Connection & Room Code Bar -->
+        <div class="flex items-center justify-between border-t border-slate-200 mt-2.5 pt-2 text-xs text-slate-500 font-mono-code">
+            <div class="flex items-center gap-2">
+                <span class="inline-block w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>서버 상태: <b id="db-status-badge" class="text-emerald-600 font-bold">연결 준비 중...</b></span>
+            </div>
+            <div class="flex items-center gap-2">
+                <span>배틀룸 코드:</span>
+                <input type="text" id="room-code-input" value="room36" maxlength="12"
+                       class="px-2 py-0.5 border border-slate-300 rounded font-bold text-slate-800 text-center w-24 focus:outline-none focus:border-indigo-500"
+                       onchange="switchRoom(this.value)">
+                <button onclick="switchRoom(document.getElementById('room-code-input').value)" class="px-2 py-0.5 bg-slate-200 hover:bg-slate-300 rounded font-bold text-slate-700">변경</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl w-full mx-auto flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+        <!-- LEFT: 6x6 Territory Grid (7 cols on desktop) -->
+        <div class="lg:col-span-7 bg-white rounded-2xl shadow-sm border border-slate-300 p-3 md:p-5 flex flex-col items-center">
+            
+            <!-- Group Selector Tabs (1조 ~ 6조) -->
+            <div class="w-full mb-3 bg-slate-100 p-1.5 rounded-2xl border border-slate-300 flex flex-col gap-1.5">
+                <div class="flex items-center justify-between px-1 text-xs">
+                    <span class="font-black text-slate-700 flex items-center gap-1.5">
+                        <span>👥</span><span>조별 독립 영토 선택</span>
+                    </span>
+                    <span class="text-[11px] text-slate-500 font-medium">원하는 조의 영토 탭을 클릭하여 확인하세요</span>
+                </div>
+                <div id="group-tabs-container" class="grid grid-cols-6 gap-1.5 font-mono-code text-xs font-bold">
+                    <!-- Populated dynamically via JS: 1조 ~ 6조 tabs -->
+                </div>
+            </div>
+
+            <!-- Grid Header -->
+            <div class="w-full flex items-center justify-between mb-3 px-1">
+                <div class="flex items-center gap-2">
+                    <span id="grid-title-text" class="text-base font-black text-slate-800">🗺️ [1조] 36칸 영토 맵 (A1 ~ F6)</span>
+                    <span class="text-xs text-slate-400">칸 클릭 시 좌표 자동 입력</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs font-bold text-slate-600">
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-white border border-slate-400 inline-block rounded-sm"></span>미점령</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-red-500 inline-block rounded-sm"></span>레드</span>
+                    <span class="flex items-center gap-1"><span class="w-3 h-3 bg-blue-500 inline-block rounded-sm"></span>블루</span>
+                </div>
+            </div>
+
+            <!-- 6x6 Grid Table (Styled exactly like spreadsheet with thick crisp borders) -->
+            <div class="w-full overflow-x-auto flex justify-center py-1">
+                <div class="sheet-border bg-slate-800 shadow-md rounded-lg overflow-hidden">
+                    <div id="territory-grid" class="grid grid-cols-6 bg-slate-700 gap-[1.5px] p-[1.5px]">
+                        <!-- Populated dynamically via JS: 36 Cells from A1 to F6 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submitter Notice Ticker below grid -->
+            <div class="w-full mt-3 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs text-slate-600 flex items-center justify-between">
+                <span id="grid-status-stream">📢 오른쪽 입력창에서 조와 팀을 선택하고 답안을 제출하세요!</span>
+                <span id="occupancy-rate" class="font-bold text-indigo-600 font-mono-code">점령률: 0 / 36 (0%)</span>
+            </div>
+        </div>
+
+        <!-- RIGHT: Student Answer Input Form and History Feed (5 cols on desktop) -->
+        <div class="lg:col-span-5 flex flex-col gap-4">
+
+            <!-- Submission Form Box (Matches image 1 style) -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-300 p-4 md:p-5">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2.5 mb-4">
+                    <h2 class="text-base font-black text-slate-800 flex items-center gap-2">
+                        <span>✍️</span><span>땅따먹기 답안 제출</span>
+                    </h2>
+                    <span id="form-group-indicator" class="text-[11px] px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">1조 영토 도전 중</span>
+                </div>
+
+                <!-- Input Form Group -->
+                <div class="flex flex-col gap-3.5">
+                    <!-- Team & Group Selection -->
+                    <div class="grid grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                                <span>🚩</span> 팀 구분
+                            </label>
+                            <select id="team-select" class="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-300 rounded-xl font-bold text-sm text-slate-800 focus:outline-none focus:border-indigo-500 transition cursor-pointer">
+                                <option value="red" selected>🔴 레드팀</option>
+                                <option value="blue">🔵 블루팀</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-700 mb-1 flex items-center gap-1">
+                                <span>👥</span> 내 소속 조 (독립 영토)
+                            </label>
+                            <select id="group-select" onchange="onGroupSelectChange(this.value)" class="w-full px-3 py-2.5 bg-slate-50 border-2 border-slate-300 rounded-xl font-bold text-sm text-slate-800 focus:outline-none focus:border-indigo-500 transition cursor-pointer">
+                                <option value="1조" selected>1조</option>
+                                <option value="2조">2조</option>
+                                <option value="3조">3조</option>
+                                <option value="4조">4조</option>
+                                <option value="5조">5조</option>
+                                <option value="6조">6조</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Target Coordinate Selection -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                <span>📍</span> 선택 좌표 (A1 ~ F6)
+                            </label>
+                            <span class="text-[11px] text-slate-400">대소문자 무관</span>
+                        </div>
+                        <div class="relative">
+                            <input type="text" id="coord-input" placeholder="예: A1 또는 C3" maxlength="3"
+                                   class="w-full px-3.5 py-3 bg-slate-50 border-2 border-slate-300 rounded-xl font-mono-code font-bold text-lg text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white uppercase tracking-wider transition"
+                                   oninput="this.value = this.value.toUpperCase()">
+                        </div>
+                    </div>
+
+                    <!-- Student Answer Input -->
+                    <div>
+                        <div class="flex justify-between items-center mb-1">
+                            <label class="text-xs font-bold text-slate-700 flex items-center gap-1">
+                                <span>📝</span> 학생 답안
+                            </label>
+                            <span class="text-[11px] text-slate-400">분수(5/13), 소수, 기호 가능</span>
+                        </div>
+                        <input type="text" id="answer-input" placeholder="예: 5/13 또는 12"
+                               class="w-full px-3.5 py-3 bg-slate-50 border-2 border-slate-300 rounded-xl font-mono-code font-bold text-lg text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                               onkeydown="if(event.key==='Enter') submitStudentAnswer()">
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button id="submit-answer-btn" onclick="submitStudentAnswer()" 
+                            class="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-700 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white font-black text-base shadow-md transition transform active:scale-95 flex items-center justify-center gap-2">
+                        <span>🚀</span>
+                        <span id="submit-btn-text">답안 검증 & [1조] 땅 점령하기</span>
+                    </button>
+                </div>
+
+                <!-- Live Notification Feedback Banner -->
+                <div id="submission-feedback" class="mt-3 text-xs font-bold text-center min-h-[22px] flex items-center justify-center px-2"></div>
+            </div>
+
+            <!-- Recent Attack & Submission Log for Selected Group -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-300 p-4">
+                <div class="flex items-center justify-between border-b border-slate-200 pb-2 mb-2.5">
+                    <span class="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                        <span>📜</span> <span id="log-group-title">1조</span> 실시간 점령 로그
+                    </span>
+                    <button onclick="clearHistoryLog()" class="text-[11px] text-slate-400 hover:text-slate-600">이 조 로그 비우기</button>
+                </div>
+                <div id="history-log-list" class="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1 text-xs">
+                    <div class="text-slate-400 text-center py-4">아직 점령 시도가 없습니다.</div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- 1. Teacher Password Login Modal (Password: 1234) -->
+    <div id="teacher-login-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-3xl p-6 md:p-8 max-w-sm w-full text-center shadow-2xl border-2 border-slate-800">
+            <div class="text-5xl mb-2">🔐</div>
+            <h3 class="text-xl font-black text-slate-900 mb-1">교사 정답관리 로그인</h3>
+            <p class="text-xs text-slate-500 mb-4">A1~F6 36개 정답 관리를 위해 비밀번호를 입력하세요.</p>
+            
+            <input type="password" id="teacher-pw-input" placeholder="비밀번호 4자리" maxlength="8"
+                   class="w-full px-4 py-3 bg-slate-50 border-2 border-slate-300 rounded-xl font-mono-code font-bold text-center text-xl mb-3 focus:outline-none focus:border-indigo-600"
+                   onkeydown="if(event.key==='Enter') verifyTeacherPassword()">
+            
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="closeTeacherLoginModal()" class="py-2.5 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-sm transition">
+                    취소
+                </button>
+                <button onclick="verifyTeacherPassword()" class="py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-sm transition shadow">
+                    확인
+                </button>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-3 font-mono-code">(기본 비밀번호: 1234)</p>
+        </div>
+    </div>
+
+    <!-- 2. PUBLIC SCOREBOARD MODAL (Safe for Beam Projector/TV: ABSOLUTELY NO ANSWERS LEAKED) -->
+    <div id="scoreboard-modal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-md hidden flex items-center justify-center z-50 p-3 md:p-5 overflow-y-auto">
+        <div class="bg-white rounded-3xl p-5 md:p-7 max-w-5xl w-full shadow-2xl border-2 border-slate-800 my-auto flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
+            
+            <!-- Scoreboard Header -->
+            <div class="flex flex-wrap items-center justify-between border-b border-slate-200 pb-3 gap-2">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-3xl">📊</span>
+                    <div>
+                        <h2 class="text-lg md:text-xl font-black text-slate-900 flex items-center gap-2">
+                            <span>실시간 조별 대형 전광판</span>
+                            <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold">학생 공개용 (정답 미노출)</span>
+                        </h2>
+                        <p class="text-xs text-slate-500">1조~6조 각 조의 레드팀 vs 블루팀 점령 현황판입니다.</p>
+                    </div>
+                </div>
+                <button onclick="closeScoreboardModal()" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition shadow">
+                    닫기 ✕
+                </button>
+            </div>
+
+            <!-- Group Scoreboard Table & Bar Graph (Matches Image 2 exactly) -->
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 bg-slate-50 p-3 md:p-4 rounded-2xl border border-slate-300">
+                <!-- Group Score Table (Matches Image 2 Table) -->
+                <div class="md:col-span-6 flex flex-col justify-center">
+                    <span class="text-xs font-black text-slate-700 mb-2 flex items-center gap-1.5">
+                        <span>📋</span> 조별 점령 칸 수 현황판
+                    </span>
+                    <div class="sheet-border bg-white rounded-lg overflow-hidden shadow-sm">
+                        <table class="w-full text-center border-collapse">
+                            <thead>
+                                <tr class="bg-indigo-50/80 border-b-2 border-slate-800 text-sm font-black text-slate-900">
+                                    <th class="py-2 px-3 border-r-2 border-slate-800 w-1/3">조</th>
+                                    <th class="py-2 px-3 border-r-2 border-slate-800 text-red-600 w-1/3">레드팀</th>
+                                    <th class="py-2 px-3 text-blue-600 w-1/3">블루팀</th>
+                                </tr>
+                            </thead>
+                            <tbody id="group-scoreboard-tbody" class="text-base font-bold text-slate-800 divide-y divide-slate-300 font-mono-code">
+                                <!-- Populated dynamically (1조 ~ 6조) -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Group Comparison Graph (Matches Image 2 Chart) -->
+                <div class="md:col-span-6 bg-white p-3.5 rounded-xl border border-slate-300 shadow-sm flex flex-col justify-between">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs font-black text-slate-700">📈 조별 점령 분포 그래프</span>
+                        <div class="flex items-center gap-3 text-[11px] font-bold">
+                            <span class="flex items-center gap-1"><span class="w-3 h-2 bg-red-500 inline-block rounded-xs"></span>레드</span>
+                            <span class="flex items-center gap-1"><span class="w-3 h-2 bg-blue-500 inline-block rounded-xs"></span>블루</span>
+                        </div>
+                    </div>
+                    <!-- CSS Bar Chart container -->
+                    <div id="group-barchart-container" class="flex flex-col gap-2 py-1 justify-center flex-1">
+                        <!-- Populated dynamically via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-3 bg-indigo-50/70 rounded-xl border border-indigo-200 text-xs text-indigo-900 text-center font-medium">
+                💡 <b>안내:</b> 각 조의 학생들이 정답을 맞혀 자신의 영토를 점령할 때마다 이 전광판의 조별 점수가 실시간으로 자동 갱신됩니다.
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. PRIVATE TEACHER ANSWER MANAGEMENT MODAL (Protected by Password 1234) -->
+    <div id="teacher-answers-modal" class="fixed inset-0 bg-slate-950/75 backdrop-blur-md hidden flex items-center justify-center z-50 p-3 md:p-5 overflow-y-auto">
+        <div class="bg-white rounded-3xl p-5 md:p-7 max-w-5xl w-full shadow-2xl border-2 border-slate-800 my-auto flex flex-col gap-4 max-h-[92vh] overflow-y-auto">
+            
+            <!-- Header -->
+            <div class="flex flex-wrap items-center justify-between border-b border-slate-200 pb-3 gap-2">
+                <div class="flex items-center gap-2.5">
+                    <span class="text-3xl">🔑</span>
+                    <div>
+                        <h2 class="text-lg md:text-xl font-black text-slate-900">교사 전용 36개 정답 설정 콘솔</h2>
+                        <p class="text-xs text-slate-500">여기서 설정한 정답은 1조부터 6조까지 모든 조의 36칸 문제에 일괄 적용됩니다.</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="openResetOptionsModal()" class="px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-300 rounded-xl text-xs font-bold transition flex items-center gap-1 shadow-xs">
+                        <span>🧹</span><span>게임판 초기화</span>
+                    </button>
+                    <button onclick="closeTeacherAnswerModal()" class="px-3.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-xl text-xs font-bold transition">
+                        닫기 ✕
+                    </button>
+                </div>
+            </div>
+
+            <!-- 36 Answer Key Editor Actions -->
+            <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 p-3 rounded-xl border border-slate-300">
+                <div class="text-xs text-slate-600">
+                    좌표(A1~F6)별 정답을 입력하세요. 학생이 입력한 답안과 일치할 때만 땅이 점령됩니다.
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="fillSampleMathAnswers()" class="px-2.5 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300 rounded-lg text-xs font-bold transition shadow-xs">
+                        💡 예시 정답 일괄 채우기
+                    </button>
+                    <button onclick="clearAllAnswers()" class="px-2.5 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg text-xs font-bold transition">
+                        전체 비우기
+                    </button>
+                    <button onclick="saveAnswersToCloud()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition shadow">
+                        💾 정답 저장하기 (모든 조 적용)
+                    </button>
+                </div>
+            </div>
+
+            <!-- 36 Answer Grid Inputs (A1 to F6) -->
+            <div class="sheet-border bg-white rounded-xl p-3 shadow-inner max-h-80 overflow-y-auto">
+                <div id="teacher-answers-grid" class="grid grid-cols-3 sm:grid-cols-6 gap-2 text-xs">
+                    <!-- 36 Input boxes populated dynamically -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Custom Alert & Confirmation Modal (No native alert/confirm) -->
+    <div id="custom-modal" class="fixed inset-0 bg-slate-950/70 backdrop-blur-sm hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl p-6 max-w-sm w-full text-center shadow-2xl border border-slate-300">
+            <div id="custom-modal-icon" class="text-4xl mb-2">📢</div>
+            <h4 id="custom-modal-title" class="text-lg font-black text-slate-900 mb-1">알림</h4>
+            <p id="custom-modal-body" class="text-xs text-slate-600 mb-5 leading-relaxed">내용</p>
+            <div id="custom-modal-actions" class="flex justify-center gap-2">
+                <button onclick="closeCustomModal()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition shadow">
+                    확인
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) this.ctx = new AudioContext();
+                }
+                if (this.ctx && this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+            playTone(freq, type, duration, gainVal = 0.15) {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = type;
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(gainVal, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch (e) {}
+            }
+            correct() {
+                this.init();
+                this.playTone(523.25, 'triangle', 0.12, 0.2); // C5
+                setTimeout(() => this.playTone(659.25, 'triangle', 0.15, 0.25), 80); // E5
+                setTimeout(() => this.playTone(783.99, 'triangle', 0.25, 0.3), 160); // G5
+                setTimeout(() => this.playTone(1046.50, 'sine', 0.4, 0.3), 240); // C6
+            }
+            wrong() {
+                this.init();
+                this.playTone(220, 'sawtooth', 0.2, 0.25);
+                setTimeout(() => this.playTone(164.81, 'sawtooth', 0.3, 0.3), 100);
+            }
+            click() {
+                this.init();
+                this.playTone(600, 'sine', 0.06, 0.1);
+            }
+        }
+        const sfx = new SoundFX();
+    </script>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Environment variables provided by platform
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'territory-game-app';
+        const firebaseConfig = typeof __firebase_config !== 'undefined'
+            ? JSON.parse(__firebase_config)
+            : {
+                apiKey: "AIzaSyChxrOzoTxFMy_BvkvNZLXAp1oRvN7Fb1g",
+                authDomain: "focus-tower-defense.firebaseapp.com",
+                projectId: "focus-tower-defense",
+                storageBucket: "focus-tower-defense.firebasestorage.app",
+                messagingSenderId: "519329169002",
+                appId: "1:519329169002:web:401534fe04b6ad39131413",
+                measurementId: "G-G2JRKQ2KXY"
+            };
+
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+
+        try {
+            const app = initializeApp(firebaseConfig);
+            auth = getAuth(app);
+            db = getFirestore(app);
+        } catch (e) {
+            console.error("Firebase init error:", e);
+        }
+
+        // Complete Authentication FIRST before any query (Mandatory Rule 3)
+        const authReadyPromise = (async () => {
+            if (!auth) return null;
+            try {
+                let cred = null;
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    cred = await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    cred = await signInAnonymously(auth);
+                }
+                currentUser = cred.user;
+                const badge = document.getElementById('db-status-badge');
+                if (badge) {
+                    badge.innerText = `🟢 온라인 정상 연결 (${currentUser.uid.substring(0, 5)}...)`;
+                    badge.className = "text-emerald-600 font-bold font-mono-code";
+                }
+                return currentUser;
+            } catch (err) {
+                console.warn("Auth initialization error:", err);
+                const badge = document.getElementById('db-status-badge');
+                if (badge) {
+                    badge.innerText = "🟡 로컬 직통 모드 활성";
+                    badge.className = "text-amber-600 font-bold font-mono-code";
+                }
+                return null;
+            }
+        })();
+
+        // 36 Cells: Columns A to F, Rows 1 to 6
+        const COLUMNS = ['A', 'B', 'C', 'D', 'E', 'F'];
+        const ROWS = [1, 2, 3, 4, 5, 6];
+        const ALL_COORDS = [];
+        for (let r of ROWS) {
+            for (let c of COLUMNS) {
+                ALL_COORDS.push(`${c}${r}`);
+            }
+        }
+
+        const GROUPS = ['1조', '2조', '3조', '4조', '5조', '6조'];
+        let activeGroup = '1조'; // Currently viewed group map
+
+        let currentRoomCode = 'room36';
+        let unsubscribeRoom = null;
+        let lastKnownRoomData = null;
+        let isSubmitting = false;
+        let bc = null;
+
+        // Strict Path Generator (Mandatory Rule 1)
+        function getRoomDocRef(roomCode) {
+            if (!db) return null;
+            return doc(db, 'artifacts', appId, 'public', 'data', 'territory_rooms', roomCode);
+        }
+
+        function createBlankGroupData() {
+            const cells = {};
+            ALL_COORDS.forEach(coord => {
+                cells[coord] = {
+                    occupied: false,
+                    team: null,       // 'red' | 'blue'
+                    answer: '',
+                    timestamp: 0
+                };
+            });
+            return {
+                cells: cells,
+                history: [],
+                scores: { red: 0, blue: 0 }
+            };
+        }
+
+        function createInitialRoomData() {
+            // Default master sample answers
+            const defaultAnswers = {};
+            ALL_COORDS.forEach((coord, idx) => {
+                const samples = ['5/13', '3/4', '12', '1/2', '2/3', '7', '4/5', '15', '1/4', '9', '8/17', '20'];
+                defaultAnswers[coord] = samples[idx % samples.length];
+            });
+
+            // Each group has its own independent territory cells!
+            const groupsData = {};
+            GROUPS.forEach(grp => {
+                groupsData[grp] = createBlankGroupData();
+            });
+
+            return {
+                answers: defaultAnswers,
+                groups: groupsData,
+                updatedAt: Date.now()
+            };
+        }
+
+        function initGroupTabsDOM() {
+            const container = document.getElementById('group-tabs-container');
+            container.innerHTML = '';
+
+            GROUPS.forEach(grp => {
+                const btn = document.createElement('button');
+                btn.id = `tab-${grp}`;
+                btn.className = (grp === activeGroup)
+                    ? "py-2 px-1 rounded-xl bg-indigo-600 text-white font-black shadow-sm transition active:scale-95 flex flex-col items-center"
+                    : "py-2 px-1 rounded-xl bg-white hover:bg-slate-200 text-slate-700 font-bold border border-slate-300 transition active:scale-95 flex flex-col items-center";
+                btn.innerHTML = `
+                    <span>${grp}</span>
+                    <span id="tab-score-${grp}" class="text-[10px] font-normal opacity-90">R:0 B:0</span>
+                `;
+                btn.onclick = () => switchActiveGroup(grp);
+                container.appendChild(btn);
+            });
+        }
+
+        function initGridDOM() {
+            const gridEl = document.getElementById('territory-grid');
+            gridEl.innerHTML = '';
+
+            ALL_COORDS.forEach(coord => {
+                const cellBtn = document.createElement('button');
+                cellBtn.id = `cell-${coord}`;
+                cellBtn.className = "w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-22 lg:h-22 bg-white flex flex-col items-center justify-center font-black text-lg sm:text-2xl md:text-3xl text-slate-800 sheet-cell-border hover:bg-slate-100 grid-cell-transition cursor-pointer shadow-xs active:scale-95";
+                cellBtn.innerHTML = `
+                    <span class="cell-label font-bold">${coord}</span>
+                    <span class="cell-sub text-[10px] sm:text-xs font-medium text-slate-400 hidden font-mono-code"></span>
+                `;
+                cellBtn.onclick = () => onCellClick(coord);
+                gridEl.appendChild(cellBtn);
+            });
+        }
+
+        function initTeacherAnswerInputs() {
+            const container = document.getElementById('teacher-answers-grid');
+            container.innerHTML = '';
+
+            ALL_COORDS.forEach(coord => {
+                const wrap = document.createElement('div');
+                wrap.className = "flex flex-col bg-slate-100 p-1.5 rounded-lg border border-slate-200";
+                wrap.innerHTML = `
+                    <span class="font-bold text-slate-700 text-[11px] mb-0.5 font-mono-code">${coord}</span>
+                    <input type="text" id="teacher-ans-${coord}" placeholder="정답" 
+                           class="w-full px-2 py-1 bg-white border border-slate-300 rounded font-mono-code font-bold text-xs text-slate-800 text-center focus:outline-none focus:border-indigo-500">
+                `;
+                container.appendChild(wrap);
+            });
+        }
+
+        window.switchActiveGroup = function(grp) {
+            sfx.click();
+            activeGroup = grp;
+
+            // Sync group select dropdown in the right panel
+            const grpSelect = document.getElementById('group-select');
+            if (grpSelect && grpSelect.value !== activeGroup) {
+                grpSelect.value = activeGroup;
+            }
+
+            // Update UI headers
+            document.getElementById('current-group-badge').innerText = activeGroup;
+            document.getElementById('grid-title-text').innerText = `🗺️ [${activeGroup}] 36칸 독립 영토 맵 (A1 ~ F6)`;
+            document.getElementById('form-group-indicator').innerText = `${activeGroup} 영토 도전 중`;
+            document.getElementById('submit-btn-text').innerText = `답안 검증 & [${activeGroup}] 땅 점령하기`;
+            document.getElementById('log-group-title').innerText = activeGroup;
+
+            // Update tab styles
+            GROUPS.forEach(g => {
+                const tabBtn = document.getElementById(`tab-${g}`);
+                if (tabBtn) {
+                    tabBtn.className = (g === activeGroup)
+                        ? "py-2 px-1 rounded-xl bg-indigo-600 text-white font-black shadow-sm transition active:scale-95 flex flex-col items-center"
+                        : "py-2 px-1 rounded-xl bg-white hover:bg-slate-200 text-slate-700 font-bold border border-slate-300 transition active:scale-95 flex flex-col items-center";
+                }
+            });
+
+            // Re-render grid for the newly selected group
+            if (lastKnownRoomData) {
+                applyRoomState(lastKnownRoomData);
+            }
+        };
+
+        window.onGroupSelectChange = function(newGroup) {
+            switchActiveGroup(newGroup);
+        };
+
+        window.onCellClick = function(coord) {
+            sfx.click();
+            const coordInput = document.getElementById('coord-input');
+            coordInput.value = coord;
+            coordInput.classList.add('ring-2', 'ring-indigo-400');
+            setTimeout(() => coordInput.classList.remove('ring-2', 'ring-indigo-400'), 300);
+
+            // Focus on answer input
+            const ansInput = document.getElementById('answer-input');
+            ansInput.focus();
+
+            // Notify if cell already taken in current active group
+            const currentGroupData = lastKnownRoomData?.groups?.[activeGroup];
+            if (currentGroupData && currentGroupData.cells && currentGroupData.cells[coord]?.occupied) {
+                const cell = currentGroupData.cells[coord];
+                const teamName = cell.team === 'red' ? '레드팀' : '블루팀';
+                showFeedback(`⚠️ [${activeGroup}] ${coord} 칸은 이미 [${teamName}]이 점령한 땅입니다!`, true);
+            }
+        };
+
+        window.switchRoom = async function(newCode) {
+            const trimmed = (newCode || 'room36').trim().toLowerCase();
+            currentRoomCode = trimmed;
+            document.getElementById('room-code-input').value = currentRoomCode;
+
+            try {
+                if (window.BroadcastChannel) {
+                    if (bc) bc.close();
+                    bc = new BroadcastChannel(`territory_${currentRoomCode}`);
+                    bc.onmessage = (event) => {
+                        const msg = event.data;
+                        if (msg?.type === 'SYNC_STATE') {
+                            applyRoomState(msg.payload);
+                        }
+                    };
+                }
+            } catch (e) {}
+
+            await authReadyPromise;
+            try {
+                const docRef = getRoomDocRef(currentRoomCode);
+                if (docRef) {
+                    startFirestoreListener(docRef);
+                    const snap = await getDoc(docRef);
+                    if (snap.exists()) {
+                        applyRoomState(snap.data());
+                    } else {
+                        const initial = createInitialRoomData();
+                        await setDoc(docRef, initial);
+                        applyRoomState(initial);
+                    }
+                }
+            } catch (e) {
+                console.warn("Switch room error:", e);
+                applyRoomState(createInitialRoomData());
+            }
+        };
+
+        function startFirestoreListener(docRef) {
+            if (unsubscribeRoom) unsubscribeRoom();
+            unsubscribeRoom = onSnapshot(docRef, (snap) => {
+                if (!snap.exists()) return;
+                applyRoomState(snap.data());
+            }, (err) => {
+                console.warn("Snapshot error:", err);
+            });
+        }
+
+        function applyRoomState(data) {
+            if (!data) return;
+
+            // Ensure groups dictionary exists
+            if (!data.groups) {
+                data.groups = {};
+            }
+            GROUPS.forEach(grp => {
+                if (!data.groups[grp]) {
+                    data.groups[grp] = createBlankGroupData();
+                }
+            });
+
+            lastKnownRoomData = data;
+
+            // 1. Update Tab mini-scores for all groups (1조 ~ 6조)
+            GROUPS.forEach(grp => {
+                const grpData = data.groups[grp];
+                const rCount = grpData.scores?.red || 0;
+                const bCount = grpData.scores?.blue || 0;
+                const tabScoreEl = document.getElementById(`tab-score-${grp}`);
+                if (tabScoreEl) {
+                    tabScoreEl.innerText = `R:${rCount} B:${bCount}`;
+                }
+            });
+
+            // 2. Render Active Group's independent 36-cell map
+            const currentGroupData = data.groups[activeGroup] || createBlankGroupData();
+            const cells = currentGroupData.cells || {};
+            let redCount = 0;
+            let blueCount = 0;
+
+            ALL_COORDS.forEach(coord => {
+                const cellData = cells[coord];
+                const cellEl = document.getElementById(`cell-${coord}`);
+                if (!cellEl) return;
+
+                const labelSpan = cellEl.querySelector('.cell-label');
+                const subSpan = cellEl.querySelector('.cell-sub');
+
+                if (cellData && cellData.occupied) {
+                    cellEl.disabled = true;
+                    cellEl.classList.remove('bg-white', 'hover:bg-slate-100');
+
+                    if (cellData.team === 'red') {
+                        redCount++;
+                        cellEl.className = "w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-22 lg:h-22 bg-red-500 text-white flex flex-col items-center justify-center font-black text-lg sm:text-2xl md:text-3xl sheet-cell-border shadow-inner cursor-not-allowed cell-captured";
+                        labelSpan.innerText = coord;
+                        subSpan.innerText = '레드';
+                        subSpan.className = "cell-sub text-[9px] sm:text-xs font-bold text-red-100 block";
+                    } else if (cellData.team === 'blue') {
+                        blueCount++;
+                        cellEl.className = "w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-22 lg:h-22 bg-blue-500 text-white flex flex-col items-center justify-center font-black text-lg sm:text-2xl md:text-3xl sheet-cell-border shadow-inner cursor-not-allowed cell-captured";
+                        labelSpan.innerText = coord;
+                        subSpan.innerText = '블루';
+                        subSpan.className = "cell-sub text-[9px] sm:text-xs font-bold text-blue-100 block";
+                    }
+                } else {
+                    // Unoccupied in this group
+                    cellEl.disabled = false;
+                    cellEl.className = "w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20 lg:w-22 lg:h-22 bg-white text-slate-800 flex flex-col items-center justify-center font-black text-lg sm:text-2xl md:text-3xl sheet-cell-border hover:bg-slate-100 grid-cell-transition cursor-pointer shadow-xs active:scale-95";
+                    labelSpan.innerText = coord;
+                    subSpan.innerText = "";
+                    subSpan.classList.add('hidden');
+                }
+            });
+
+            // 3. Update Active Group Scores in Header
+            document.getElementById('score-red-badge').innerText = redCount;
+            document.getElementById('score-blue-badge').innerText = blueCount;
+
+            // 4. Update Occupancy Ticker for Active Group
+            const totalOccupied = redCount + blueCount;
+            const pct = Math.round((totalOccupied / 36) * 100);
+            document.getElementById('occupancy-rate').innerText = `[${activeGroup}] 점령률: ${totalOccupied} / 36 (${pct}%)`;
+
+            // 5. Update History Log for Active Group
+            renderHistoryLog(currentGroupData.history || []);
+
+            // 6. Update Public Scoreboard Table & Bar Chart (Image 2 style across all groups)
+            renderTeacherScoreboard(data.groups);
+
+            // 7. Populate Teacher Answers inputs if open
+            if (data.answers) {
+                ALL_COORDS.forEach(coord => {
+                    const inputEl = document.getElementById(`teacher-ans-${coord}`);
+                    if (inputEl && document.activeElement !== inputEl) {
+                        inputEl.value = data.answers[coord] || '';
+                    }
+                });
+            }
+        }
+
+        function renderHistoryLog(history = []) {
+            const listEl = document.getElementById('history-log-list');
+            if (!history || history.length === 0) {
+                listEl.innerHTML = `<div class="text-slate-400 text-center py-4">아직 점령 시도가 없습니다.</div>`;
+                return;
+            }
+
+            listEl.innerHTML = '';
+            const recent = history.slice(0, 15);
+            recent.forEach(item => {
+                const row = document.createElement('div');
+                const isRed = item.team === 'red';
+                const teamBadgeColor = isRed ? 'bg-red-100 text-red-700 border-red-300' : 'bg-blue-100 text-blue-700 border-blue-300';
+                const icon = item.isCorrect ? (isRed ? '🚩' : '🏳️') : '❌';
+                const statusColor = item.isCorrect ? (isRed ? 'text-red-600' : 'text-blue-600') : 'text-slate-400';
+
+                row.className = "flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs";
+                row.innerHTML = `
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm">${icon}</span>
+                        <span class="px-1.5 py-0.5 rounded font-bold text-[10px] border ${teamBadgeColor}">${isRed ? '레드팀' : '블루팀'}</span>
+                        <span class="font-black font-mono-code">${item.coord}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-500 font-mono-code">"${item.submittedAnswer}"</span>
+                        <span class="font-bold ${statusColor}">${item.isCorrect ? '점령 성공!' : '오답'}</span>
+                    </div>
+                `;
+                listEl.appendChild(row);
+            });
+        }
+
+        // Recreate Image 2: Table of 1조~6조 and Bar Graph (NO ANSWERS)
+        function renderTeacherScoreboard(groupsData = {}) {
+            const tbody = document.getElementById('group-scoreboard-tbody');
+            const chartContainer = document.getElementById('group-barchart-container');
+            if (!tbody || !chartContainer) return;
+
+            tbody.innerHTML = '';
+            chartContainer.innerHTML = '';
+
+            GROUPS.forEach(grp => {
+                const gInfo = groupsData[grp] || { scores: { red: 0, blue: 0 } };
+                const redScore = gInfo.scores?.red || 0;
+                const blueScore = gInfo.scores?.blue || 0;
+
+                // 1. Table row (Image 2 Table)
+                const tr = document.createElement('tr');
+                tr.className = (grp === activeGroup) ? "bg-indigo-50/50 font-black border-b border-slate-200" : "hover:bg-slate-50 transition border-b border-slate-200";
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 border-r-2 border-slate-800 font-black text-slate-800 flex items-center justify-center gap-1">
+                        <span>${grp}</span>
+                        ${grp === activeGroup ? '<span class="text-[10px] text-indigo-600 font-bold">(선택)</span>' : ''}
+                    </td>
+                    <td class="py-2.5 px-3 border-r-2 border-slate-800 font-bold text-red-600 text-lg">${redScore}</td>
+                    <td class="py-2.5 px-3 font-bold text-blue-600 text-lg">${blueScore}</td>
+                `;
+                tbody.appendChild(tr);
+
+                // 2. Bar Chart Row (Image 2 Bar Chart)
+                const chartRow = document.createElement('div');
+                chartRow.className = "flex items-center gap-2 text-xs";
+
+                const maxScale = 18; // Max 36 cells
+                const redPct = Math.min(100, Math.round((redScore / maxScale) * 100));
+                const bluePct = Math.min(100, Math.round((blueScore / maxScale) * 100));
+
+                chartRow.innerHTML = `
+                    <span class="w-8 font-bold text-slate-600 text-right shrink-0">${grp}</span>
+                    <div class="flex-1 flex flex-col gap-1">
+                        <!-- Red bar -->
+                        <div class="w-full bg-slate-100 rounded h-3 overflow-hidden flex items-center">
+                            <div class="bg-red-500 h-full transition-all duration-300 rounded" style="width: ${redPct}%;"></div>
+                            <span class="text-[10px] font-bold text-red-600 ml-1.5 font-mono-code">${redScore}</span>
+                        </div>
+                        <!-- Blue bar -->
+                        <div class="w-full bg-slate-100 rounded h-3 overflow-hidden flex items-center">
+                            <div class="bg-blue-500 h-full transition-all duration-300 rounded" style="width: ${bluePct}%;"></div>
+                            <span class="text-[10px] font-bold text-blue-600 ml-1.5 font-mono-code">${blueScore}</span>
+                        </div>
+                    </div>
+                `;
+                chartContainer.appendChild(chartRow);
+            });
+        }
+
+        function cleanAnswerString(str) {
+            if (!str) return '';
+            return String(str).trim().toLowerCase().replace(/\s+/g, '');
+        }
+
+        window.submitStudentAnswer = async function() {
+            if (isSubmitting) return;
+
+            const coordInput = document.getElementById('coord-input');
+            const answerInput = document.getElementById('answer-input');
+            const teamSelect = document.getElementById('team-select');
+            const groupSelect = document.getElementById('group-select');
+
+            const coord = (coordInput.value || '').trim().toUpperCase();
+            const rawStudentAnswer = (answerInput.value || '').trim();
+            const team = teamSelect.value;
+            const chosenGroup = groupSelect.value;
+
+            // Ensure activeGroup matches submitted group
+            if (activeGroup !== chosenGroup) {
+                switchActiveGroup(chosenGroup);
+            }
+
+            // 1. Validation of Coordinate
+            if (!ALL_COORDS.includes(coord)) {
+                showFeedback("⚠️ 올바른 좌표를 입력하세요! (예: A1에서 F6)", true);
+                sfx.wrong();
+                coordInput.focus();
+                return;
+            }
+
+            // 2. Validation of Answer Field
+            if (!rawStudentAnswer) {
+                showFeedback("⚠️ 학생 답안을 입력해 주세요!", true);
+                sfx.wrong();
+                answerInput.focus();
+                return;
+            }
+
+            if (!lastKnownRoomData) {
+                showFeedback("데이터를 불러오는 중입니다. 잠시 후 다시 시도하세요.", true);
+                return;
+            }
+
+            // 3. Check if cell is already occupied in THIS group's territory
+            const groupData = lastKnownRoomData.groups?.[chosenGroup] || createBlankGroupData();
+            const currentCell = groupData.cells?.[coord];
+            if (currentCell && currentCell.occupied) {
+                const ownerTeam = currentCell.team === 'red' ? '레드팀' : '블루팀';
+                showFeedback(`❌ [${chosenGroup}] ${coord} 칸은 이미 [${ownerTeam}]이 점령했습니다!`, true);
+                sfx.wrong();
+                return;
+            }
+
+            // 4. Compare with Master Teacher's Key for this cell
+            const teacherKey = lastKnownRoomData.answers?.[coord] || '';
+            const normalizedStudent = cleanAnswerString(rawStudentAnswer);
+            const normalizedTeacher = cleanAnswerString(teacherKey);
+
+            isSubmitting = true;
+            const submitBtn = document.getElementById('submit-answer-btn');
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50');
+
+            const isCorrect = (normalizedStudent === normalizedTeacher) && (normalizedTeacher !== '');
+
+            // Deep clone room data
+            const nextData = JSON.parse(JSON.stringify(lastKnownRoomData));
+            if (!nextData.groups) nextData.groups = {};
+            if (!nextData.groups[chosenGroup]) nextData.groups[chosenGroup] = createBlankGroupData();
+
+            const targetGroupObj = nextData.groups[chosenGroup];
+            if (!targetGroupObj.cells) targetGroupObj.cells = {};
+            if (!targetGroupObj.history) targetGroupObj.history = [];
+            if (!targetGroupObj.scores) targetGroupObj.scores = { red: 0, blue: 0 };
+
+            const historyItem = {
+                id: Date.now() + Math.random(),
+                coord: coord,
+                submittedAnswer: rawStudentAnswer,
+                team: team,
+                group: chosenGroup,
+                isCorrect: isCorrect,
+                timestamp: Date.now()
+            };
+
+            targetGroupObj.history.unshift(historyItem);
+            if (targetGroupObj.history.length > 50) targetGroupObj.history.pop();
+
+            if (isCorrect) {
+                sfx.correct();
+                targetGroupObj.cells[coord] = {
+                    occupied: true,
+                    team: team,
+                    answer: rawStudentAnswer,
+                    timestamp: Date.now()
+                };
+
+                // Increment group score
+                if (team === 'red') targetGroupObj.scores.red = (targetGroupObj.scores.red || 0) + 1;
+                else targetGroupObj.scores.blue = (targetGroupObj.scores.blue || 0) + 1;
+
+                const teamName = team === 'red' ? '레드팀' : '블루팀';
+                showFeedback(`🎉 [정답!] [${chosenGroup}] ${coord} 영토를 [${teamName}]이 점령했습니다!`, false);
+                document.getElementById('grid-status-stream').innerText = `✨ [${chosenGroup}] ${teamName}이 ${coord} 영토를 쟁탈했습니다!`;
+
+                coordInput.value = '';
+                answerInput.value = '';
+                coordInput.focus();
+            } else {
+                sfx.wrong();
+                showFeedback(`❌ [오답] [${chosenGroup}] ${coord} 정답이 아닙니다. 다시 계산해 보세요!`, true);
+                answerInput.select();
+            }
+
+            nextData.updatedAt = Date.now();
+            applyRoomState(nextData);
+
+            // Peer broadcast
+            if (bc) {
+                try {
+                    bc.postMessage({ type: 'SYNC_STATE', payload: nextData });
+                } catch (e) {}
+            }
+
+            // Cloud sync
+            try {
+                const docRef = getRoomDocRef(currentRoomCode);
+                if (docRef) {
+                    await setDoc(docRef, nextData, { merge: true });
+                }
+            } catch (e) {
+                console.warn("Sync error:", e);
+            } finally {
+                setTimeout(() => {
+                    isSubmitting = false;
+                    submitBtn.disabled = false;
+                    submitBtn.classList.remove('opacity-50');
+                }, 300);
+            }
+        };
+
+        function showFeedback(msg, isError) {
+            const el = document.getElementById('submission-feedback');
+            el.innerText = msg;
+            el.className = isError
+                ? "mt-3 text-xs font-black text-red-600 bg-red-50 p-2 rounded-xl border border-red-200 text-center min-h-[22px]"
+                : "mt-3 text-xs font-black text-emerald-700 bg-emerald-50 p-2 rounded-xl border border-emerald-300 text-center min-h-[22px]";
+        }
+
+        window.clearHistoryLog = function() {
+            if (!lastKnownRoomData || !lastKnownRoomData.groups?.[activeGroup]) return;
+            const nextData = JSON.parse(JSON.stringify(lastKnownRoomData));
+            nextData.groups[activeGroup].history = [];
+            applyRoomState(nextData);
+            try {
+                const docRef = getRoomDocRef(currentRoomCode);
+                if (docRef) updateDoc(docRef, { [`groups.${activeGroup}.history`]: [] });
+            } catch (e) {}
+        };
+
+        // 1. PUBLIC SCOREBOARD MODAL (Safe for Projector)
+        window.openScoreboardModal = function() {
+            sfx.click();
+            document.getElementById('scoreboard-modal').classList.remove('hidden');
+            if (lastKnownRoomData) {
+                renderTeacherScoreboard(lastKnownRoomData.groups || {});
+            }
+        };
+
+        window.closeScoreboardModal = function() {
+            document.getElementById('scoreboard-modal').classList.add('hidden');
+        };
+
+        // 2. PRIVATE TEACHER ANSWER MANAGEMENT (PW: 1234)
+        window.openTeacherLoginModal = function() {
+            sfx.click();
+            document.getElementById('teacher-pw-input').value = '';
+            document.getElementById('teacher-login-modal').classList.remove('hidden');
+            setTimeout(() => document.getElementById('teacher-pw-input').focus(), 100);
+        };
+
+        window.closeTeacherLoginModal = function() {
+            document.getElementById('teacher-login-modal').classList.add('hidden');
+        };
+
+        window.verifyTeacherPassword = function() {
+            const pw = document.getElementById('teacher-pw-input').value.trim();
+            if (pw === '1234') {
+                sfx.correct();
+                closeTeacherLoginModal();
+                openTeacherAnswerModal();
+            } else {
+                sfx.wrong();
+                showCustomModal("인증 실패", "비밀번호가 올바르지 않습니다! (기본 비밀번호: 1234)");
+            }
+        };
+
+        window.openTeacherAnswerModal = function() {
+            document.getElementById('teacher-answers-modal').classList.remove('hidden');
+            if (lastKnownRoomData?.answers) {
+                ALL_COORDS.forEach(coord => {
+                    const inputEl = document.getElementById(`teacher-ans-${coord}`);
+                    if (inputEl) inputEl.value = lastKnownRoomData.answers[coord] || '';
+                });
+            }
+        };
+
+        window.closeTeacherAnswerModal = function() {
+            document.getElementById('teacher-answers-modal').classList.add('hidden');
+        };
+
+        window.fillSampleMathAnswers = function() {
+            sfx.click();
+            const samplePool = [
+                '5/13', '3/4', '12', '1/2', '2/3', '7',
+                '4/5', '15', '1/4', '9', '8/17', '20',
+                '3/5', '18', '5/6', '10', '1/3', '25',
+                '2/5', '8', '7/10', '16', '3/8', '30',
+                '5/8', '24', '1/5', '11', '7/8', '14',
+                '9/10', '22', '1/6', '13', '5/12', '28'
+            ];
+
+            ALL_COORDS.forEach((coord, idx) => {
+                const inputEl = document.getElementById(`teacher-ans-${coord}`);
+                if (inputEl) inputEl.value = samplePool[idx % samplePool.length];
+            });
+            showCustomModal("예시 채우기 완료", "36개 칸에 중등 수학 정답 예시가 일괄 입력되었습니다. [💾 정답 저장하기]를 눌러 모든 조에 적용하세요.");
+        };
+
+        window.clearAllAnswers = function() {
+            sfx.click();
+            ALL_COORDS.forEach(coord => {
+                const inputEl = document.getElementById(`teacher-ans-${coord}`);
+                if (inputEl) inputEl.value = '';
+            });
+        };
+
+        window.saveAnswersToCloud = async function() {
+            sfx.click();
+            if (!lastKnownRoomData) return;
+
+            const newAnswers = {};
+            ALL_COORDS.forEach(coord => {
+                const inputEl = document.getElementById(`teacher-ans-${coord}`);
+                newAnswers[coord] = inputEl ? inputEl.value.trim() : '';
+            });
+
+            const nextData = { ...lastKnownRoomData, answers: newAnswers, updatedAt: Date.now() };
+            applyRoomState(nextData);
+
+            if (bc) {
+                try { bc.postMessage({ type: 'SYNC_STATE', payload: nextData }); } catch (e) {}
+            }
+
+            try {
+                const docRef = getRoomDocRef(currentRoomCode);
+                if (docRef) {
+                    await setDoc(docRef, nextData, { merge: true });
+                }
+                sfx.correct();
+                showCustomModal("정답 저장 완료", "36개 좌표의 정답이 클라우드에 성공적으로 저장되었으며, 모든 조(1조~6조)에 일괄 적용되었습니다!");
+            } catch (e) {
+                showCustomModal("저장 실패", "클라우드 저장 중 오류가 발생했습니다: " + e.message);
+            }
+        };
+
+        // Reset Options Modal (Reset Active Group vs All Groups)
+        window.openResetOptionsModal = function() {
+            sfx.click();
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('custom-modal-icon').innerText = '⚠️';
+            document.getElementById('custom-modal-title').innerText = '게임판 초기화 선택';
+            document.getElementById('custom-modal-body').innerText = '현재 보고 있는 [' + activeGroup + ']의 영토만 초기화하시겠습니까, 아니면 모든 조(1조~6조)의 영토를 모두 초기화하시겠습니까? (설정된 정답은 유지됩니다)';
+
+            const actions = document.getElementById('custom-modal-actions');
+            actions.innerHTML = `
+                <button onclick="closeCustomModal()" class="px-3 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-xl text-xs">취소</button>
+                <button onclick="executeGroupReset(false)" class="px-3 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs shadow">[${activeGroup}]만 초기화</button>
+                <button onclick="executeGroupReset(true)" class="px-3 py-2 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow">모든 조 일괄 초기화</button>
+            `;
+            modal.classList.remove('hidden');
+        };
+
+        window.executeGroupReset = async function(resetAll) {
+            closeCustomModal();
+            sfx.click();
+
+            if (!lastKnownRoomData) return;
+            const nextData = JSON.parse(JSON.stringify(lastKnownRoomData));
+
+            if (resetAll) {
+                GROUPS.forEach(grp => {
+                    nextData.groups[grp] = createBlankGroupData();
+                });
+            } else {
+                nextData.groups[activeGroup] = createBlankGroupData();
+            }
+
+            nextData.updatedAt = Date.now();
+            applyRoomState(nextData);
+
+            if (bc) {
+                try { bc.postMessage({ type: 'SYNC_STATE', payload: nextData }); } catch (e) {}
+            }
+
+            try {
+                const docRef = getRoomDocRef(currentRoomCode);
+                if (docRef) {
+                    await setDoc(docRef, nextData);
+                }
+                sfx.correct();
+                showCustomModal("초기화 완료", resetAll ? "1조부터 6조까지 모든 영토 맵이 새 게임으로 깨끗하게 초기화되었습니다!" : `[${activeGroup}] 영토 맵이 초기화되었습니다!`);
+            } catch (e) {
+                console.warn("Reset error:", e);
+            }
+        };
+
+        window.showCustomModal = function(title, body) {
+            const modal = document.getElementById('custom-modal');
+            document.getElementById('custom-modal-icon').innerText = '📢';
+            document.getElementById('custom-modal-title').innerText = title;
+            document.getElementById('custom-modal-body').innerText = body;
+            const actions = document.getElementById('custom-modal-actions');
+            actions.innerHTML = `
+                <button onclick="closeCustomModal()" class="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl text-xs transition shadow">
+                    확인
+                </button>
+            `;
+            modal.classList.remove('hidden');
+        };
+
+        window.closeCustomModal = function() {
+            document.getElementById('custom-modal').classList.add('hidden');
+        };
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initGroupTabsDOM();
+            initGridDOM();
+            initTeacherAnswerInputs();
+            switchRoom('room36');
+        });
+    </script>
+</body>
+</html>

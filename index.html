@@ -210,15 +210,16 @@
 
                     <!-- Student Answer Input -->
                     <div>
-                        <div class="flex justify-between items-center mb-1">
+                        <div class="flex flex-wrap justify-between items-center mb-1 gap-1">
                             <label class="text-xs font-bold text-slate-700 flex items-center gap-1">
                                 <span>📝</span> 학생 답안
                             </label>
-                            <span class="text-[11px] text-slate-400">분수(5/13), 소수, 기호 가능</span>
+                            <span class="text-[11px] text-rose-600 font-bold">띄어쓰기 금지, 단위없이 숫자만</span>
                         </div>
-                        <input type="text" id="answer-input" placeholder="예: 5/13 또는 12"
-                               class="w-full px-3.5 py-3 bg-slate-50 border-2 border-slate-300 rounded-xl font-mono-code font-bold text-lg text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
+                        <input type="text" id="answer-input" placeholder="예: 12/15, sinA, 루트13"
+                               class="w-full px-3.5 py-3 bg-slate-50 border-2 border-slate-300 rounded-xl font-mono-code font-bold text-base md:text-lg text-slate-800 focus:outline-none focus:border-indigo-500 focus:bg-white transition"
                                onkeydown="if(event.key==='Enter') submitStudentAnswer()">
+                        <p class="text-[11px] text-slate-500 mt-1 font-medium">※ 입력 예시: 12/15, sinA, 루트13 (띄어쓰기 금지, 단위없이 숫자만)</p>
                     </div>
 
                     <!-- Submit Button -->

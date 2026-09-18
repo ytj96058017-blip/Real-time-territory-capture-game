@@ -838,16 +838,17 @@
                 const teamBadgeColor = isRed ? 'bg-red-100 text-red-700 border-red-300' : 'bg-blue-100 text-blue-700 border-blue-300';
                 const icon = item.isCorrect ? (isRed ? '🚩' : '🏳️') : '❌';
                 const statusColor = item.isCorrect ? (isRed ? 'text-red-600' : 'text-blue-600') : 'text-slate-400';
+                const timeStr = item.timestamp ? new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
 
                 row.className = "flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200 text-xs";
                 row.innerHTML = `
                     <div class="flex items-center gap-2">
                         <span class="text-sm">${icon}</span>
                         <span class="px-1.5 py-0.5 rounded font-bold text-[10px] border ${teamBadgeColor}">${isRed ? '레드팀' : '블루팀'}</span>
-                        <span class="font-black font-mono-code">${item.coord}</span>
+                        <span class="font-black font-mono-code text-slate-800">${item.coord}</span>
                     </div>
                     <div class="flex items-center gap-2">
-                        <span class="text-slate-500 font-mono-code">"${item.submittedAnswer}"</span>
+                        <span class="text-[11px] text-slate-400 font-mono-code">${timeStr}</span>
                         <span class="font-bold ${statusColor}">${item.isCorrect ? '점령 성공!' : '오답'}</span>
                     </div>
                 `;
@@ -988,7 +989,6 @@
             const historyItem = {
                 id: Date.now() + Math.random(),
                 coord: coord,
-                submittedAnswer: rawStudentAnswer,
                 team: team,
                 group: chosenGroup,
                 isCorrect: isCorrect,
